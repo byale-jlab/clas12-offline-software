@@ -490,10 +490,10 @@ public class FittedHit extends Hit implements Comparable<Hit> {
 
     }
     
-    public double XatY(DCGeant4Factory DcDetector, double y) {
-        double x = this.calc_GeomCorr(DcDetector, y);
-        return x + this.get_LeftRightAmb() * (this.get_TimeToDistance()) ;
-    }
+//    public double XatY(DCGeant4Factory DcDetector, double y) {
+//        double x = this.calc_GeomCorr(DcDetector, y);
+//        return x + this.get_LeftRightAmb() * (this.get_TimeToDistance()) ;
+//    }
         
     private double _WireLength;
 
