@@ -29,7 +29,7 @@ public class TrackListFinder {
             Swim bstSwim) {
         List<Track> tracks = new ArrayList<Track>();
         if (cands.size() == 0) {
-            System.err.print("Error no tracks found");
+//            System.err.print("Error no tracks found");
             return cands;
         }
 
@@ -57,7 +57,7 @@ public class TrackListFinder {
                 trk.set_TrackDirAtCTOFRadius(new Vector3D(pointAtCylRad[3]*10, pointAtCylRad[4]*10, pointAtCylRad[5]*10));
 
                 trk.set_pathLength(pointAtCylRad[6]*10);
-
+                
                 TrajectoryFinder trjFind = new TrajectoryFinder();
 
                 Trajectory traj = trjFind.findTrajectory(trk.get_Id(), trk.get_helix(), trk, svt_geo, bmt_geo, "final");
