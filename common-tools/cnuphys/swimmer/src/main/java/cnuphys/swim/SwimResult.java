@@ -11,6 +11,9 @@ public class SwimResult {
 	//the final path length
 	private double _finalS;
 	
+	//a status
+	private int _status;
+	
 	/**
 	 * Create a container for the swim results
 	 * @param dim the dimension of the system (probably 6)
@@ -48,5 +51,12 @@ public class SwimResult {
 		_finalS = finalS;
 	}
 
+	public void setStatus(int status) {
+		_status = status;
+	}
+	
+	public int getStatus() {
+		return _status;
+	}
 
 }

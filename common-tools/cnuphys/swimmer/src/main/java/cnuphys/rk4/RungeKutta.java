@@ -1,6 +1,5 @@
 package cnuphys.rk4;
 
-import java.util.ArrayDeque;
 import java.util.List;
 
 /**
@@ -22,14 +21,8 @@ public class RungeKutta {
 	private double _maxStepSize = DEFMAXSTEPSIZE;
 
 	// the max dimension we'll use is probably 6, for state vectors
-	// [x,y,z,vx,vy,vz].
+	// e.g., [x, y, z, px/p, py/p, pz/p].
 	private static int MAXDIM = 6; // we'll know if this fails!
-
-	// object cache
-	private ArrayDeque<HalfStepAdvance> _hafStepAdvCache = new ArrayDeque<>();
-
-	// object cache
-	private ArrayDeque<double[]> _workArrayCache = new ArrayDeque<>();
 
 	/**
 	 * Create a RungeKutta object that can be used for integration
@@ -302,15 +295,9 @@ public class RungeKutta {
 		// ButcherTableauAdvance advancer = new ButcherTableauAdvance(tableau);
 		// use a simple half-step advance
 
-		HalfStepAdvance advancer;
-		if (_hafStepAdvCache.isEmpty()) {
-			advancer = new HalfStepAdvance();
-		} else {
-			advancer = _hafStepAdvCache.pop();
-		}
+		HalfStepAdvance advancer = new HalfStepAdvance();
 
 		int n = driver(yo, yf, to, tf, h, maxH, deriv, stopper, advancer, relTolerance, hdata);
-		_hafStepAdvCache.push(advancer);
 		return n;
 	}
 
@@ -552,6 +539,7 @@ public class RungeKutta {
 		}
 
 		int nstep = 0;
+//		System.err.println("------   h = " + h + "   so = " + to + "   sf = " + tf);
 		while (t < tf) {
 			// use derivs at previous t
 			deriv.derivative(t, yt, dydt);
@@ -570,6 +558,8 @@ public class RungeKutta {
 
 			if (decreaseStep) {
 				h = h / 2;
+				
+//				System.err.println("ADAPT SHRINK h = " + h);
 				if (h < _minStepSize) {
 					throw (new RungeKuttaException("Step size too small in Runge Kutta driver (A)"));
 				}
@@ -611,6 +601,7 @@ public class RungeKutta {
 				// System.err.println("HEY MAN (A) h = " + h);
 				h *= HGROWTH;
 				h = Math.min(h, _maxStepSize);
+//				System.err.println("ADAPT GROW h = " + h);
 
 			} // max error < tolerance
 		}
@@ -677,9 +668,9 @@ public class RungeKutta {
 		// yf is the current value of the state vector,
 		// typically [x, y, z, vx, vy, vz] and derivative
 
-		double yt[] = getWorkArrayFromCache();
-		double yt2[] = getWorkArrayFromCache();
-		double dydt[] = getWorkArrayFromCache();
+		double yt[] = new double[nDim];
+		double yt2[] = new double[nDim];
+		double dydt[] = new double[nDim];
 		System.arraycopy(uo, 0, yt, 0, nDim);
 
 		// do we compute error?
@@ -736,10 +727,6 @@ public class RungeKutta {
 							System.arraycopy(yt, 0, uf, 0, nDim);
 						}
 
-						_workArrayCache.push(yt);
-						_workArrayCache.push(yt2);
-						_workArrayCache.push(dydt);
-
 						return nstep; // actual number of steps taken
 					}
 				}
@@ -755,12 +742,6 @@ public class RungeKutta {
 		if ((hdata != null) && (nstep > 0)) {
 			hdata[1] = hdata[1] / nstep;
 		}
-
-		_workArrayCache.push(yt);
-		_workArrayCache.push(yt2);
-		_workArrayCache.push(dydt);
-
-//		System.out.println("  ****** workarray cache size: " + _workArrayCache.size());
 
 		return nstep;
 	}
@@ -902,15 +883,6 @@ public class RungeKutta {
 		return nstep;
 	}
 
-	private double[] getWorkArrayFromCache() {
-		double array[];
-		if (_workArrayCache.isEmpty()) {
-			array = new double[MAXDIM];
-		} else {
-			array = _workArrayCache.pop();
-		}
-		return array;
-	}
 
 	// A uniform step size advancer
 	class UniformAdvance implements IAdvance {
@@ -924,10 +896,10 @@ public class RungeKutta {
 			double k1[] = dydt; // the current dreivatives
 			// we need some arrays from the pool
 
-			double k2[] = getWorkArrayFromCache();
-			double k3[] = getWorkArrayFromCache();
-			double k4[] = getWorkArrayFromCache();
-			double ytemp[] = getWorkArrayFromCache();
+			double k2[] = new double[nDim];
+			double k3[] = new double[nDim];
+			double k4[] = new double[nDim];
+			double ytemp[] = new double[nDim];
 
 			double hh = h * 0.5; // half step
 			double h6 = h / 6.0;
@@ -959,12 +931,6 @@ public class RungeKutta {
 				yout[i] = y[i] + h6 * (k1[i] + +2.0 * k2[i] + 2 * k3[i] + k4[i]);
 			}
 
-			// return the work arrays to the cache
-			// note k1 is NOT a work array
-			_workArrayCache.push(k2);
-			_workArrayCache.push(k3);
-			_workArrayCache.push(k4);
-			_workArrayCache.push(ytemp);
 		}
 
 		@Override
@@ -1036,19 +1002,19 @@ public class RungeKutta {
 			int nDim = y.length;
 			int numStage = tableau.getS();
 
-			double ytemp[] = getWorkArrayFromCache();
+			double ytemp[] = new double[nDim];
 			double k[][] = new double[numStage + 1][];
 			k[0] = null; // not used
 
 			// k1 is just h*dydt
-			k[1] = getWorkArrayFromCache();
+			k[1] = new double[nDim];
 			for (int i = 0; i < nDim; i++) {
 				k[1][i] = h * dydt[i];
 			}
 
 			// fill the numStage k vectors
 			for (int s = 2; s <= numStage; s++) {
-				k[s] = getWorkArrayFromCache();
+				k[s] =new double[nDim];
 
 				double ts = t + tableau.c(s);
 				for (int i = 0; i < nDim; i++) {
@@ -1101,11 +1067,6 @@ public class RungeKutta {
 
 			}
 
-			// //return the work arrays
-			_workArrayCache.push(ytemp);
-			for (int s = 1; s <= numStage; s++) {
-				_workArrayCache.push((k[s]));
-			}
 		}
 
 		@Override

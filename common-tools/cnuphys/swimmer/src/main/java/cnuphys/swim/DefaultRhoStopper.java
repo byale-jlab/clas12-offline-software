@@ -13,12 +13,12 @@ public class DefaultRhoStopper implements IStopper {
 	private double _targetRho;
 	private double _totS; //total path length
 	private double _prevS; //previous step path length
-	private double _maxS;
+	private double _sMax;
 	private double _accuracy;
-	private double _currentRho = Double.NaN;
 	private double[] _uf; //final state vector
-	private double[] _uprev; //last u with the same sign
 	private double _s0; //starting path length
+//	private int _prevRdot = 0;
+//	public boolean rdotChanged;
 	
 	private int _dim;   //dimension of our system
 	
@@ -36,16 +36,16 @@ public class DefaultRhoStopper implements IStopper {
 	 */
 	public DefaultRhoStopper(double[] uo, double s0, double sMax, double rho0, double targetRho, double accuracy) {
 		
+		
 		_s0 = s0;
 		_dim = uo.length;
 		
 		_uf = new double[_dim];
-		_uprev = new double[_dim];
 		
 		_targetRho = targetRho;
 		_totS = 0;
 		_prevS = 0;
-		_maxS = sMax;
+		_sMax = sMax;
 		_accuracy = accuracy;
 		_startSign = sign(rho0);
 	}
@@ -56,6 +56,7 @@ public class DefaultRhoStopper implements IStopper {
 	}
 
 
+	//array copy for state vectors
 	private void copy(double src[], double[] dest) {
 		System.arraycopy(src, 0, dest, 0, _dim);
 	}
@@ -63,31 +64,31 @@ public class DefaultRhoStopper implements IStopper {
 	@Override
 	public boolean stopIntegration(double s, double[] u) {
 		
-		_currentRho = Math.hypot(u[0], u[1]);
+		double currentRho = Math.hypot(u[0], u[1]);
 		_totS = s;
 
 		// within accuracy?
-		if (Math.abs(_currentRho - _targetRho) < _accuracy) {
+		//note this could also result with s > smax
+		if (Math.abs(currentRho - _targetRho) < _accuracy) {
             copy(u, _uf);
 			return true;
 		}
 
-		// independent variable s is the path length
-		if (s > _maxS) {
-			copy(u, _uf);
-			return true;
-		}
-
-		//stop (and backup/reset to prev) if we crossed the boundary
-		if (sign(_currentRho) != _startSign) {
+		//stop (and backup/reset to prev) if we crossed the boundary or exceeded smax
+		if ((getFinalT() > _sMax) || (sign(currentRho) != _startSign)) {
 			_totS = _prevS;
-			copy(_uprev, _uf);	
 			return true;
 		}
 		
+//		int rdSign = rhoDotSign(u);
+//		if ((_prevRdot != 0) && (rdSign != 0) && (_prevRdot != rdSign)) {
+//			rdotChanged = true;;
+//		}
+//		_prevRdot = rdSign;
+		
 		//copy current to previous
 		_prevS = _totS;
-		copy(u, _uprev);	
+        copy(u, _uf);
 		return false;
 	}
 
@@ -99,17 +100,6 @@ public class DefaultRhoStopper implements IStopper {
 	@Override
 	public double getFinalT() {
 		return _s0 + _totS;
-	}
-
-	/**
-	 * Is the current rho within accuracy
-	 * 
-	 * @param rho        current rho
-	 * @param accuracy accuracy
-	 * @return <code>true</code> if current z with accuracy
-	 */
-	public boolean withinAccuracy(double rho, double accuracy) {
-		return Math.abs(rho - _targetRho) < accuracy;
 	}
 
 	@Override
@@ -127,6 +117,24 @@ public class DefaultRhoStopper implements IStopper {
 		}
 		return _uf;
 	}
+	
+//	public int rhoDotSign(double u[]) {
+//		double val = u[0]*u[3] + u[1]*u[4];
+//		if (val == 0) {
+//			System.err.println("ZERO!");
+//		}
+//		
+//		if (val < 0) {
+//			return -1;
+//		}
+//		else if (val > 0) {
+//			return 1;
+//		}
+//		else {
+//			return 0;
+//		}
+//	}
+
 	/**
 	 * Generally this is the same as stop integration. So most will just return
 	 * stopIntegration(). But sometimes stop just means we reset and integrate more.
@@ -140,13 +148,9 @@ public class DefaultRhoStopper implements IStopper {
 	 */
 	@Override
 	public boolean terminateIntegration(double t, double y[]) {
-		boolean stop = Math.abs(_currentRho - _targetRho) < _accuracy;
-		
-		if (stop) {
-			copy(_uf, y);	
-		}
-
-		return stop;
+		System.err.println("Should not be called. Ever.");
+		System.exit(1);
+		return false;
 	}
 
 }

@@ -29,6 +29,9 @@ public final class Swimmer {
 
 	// Min momentum to swim in GeV/c
 	public static final double MINMOMENTUM = 5e-05;
+	
+	//tolerance when swimmimg to a max path length
+	public static final double SMAX_TOLERANCE = 1.0e-4;  //meters
 
 	// We have different tableaus we can use for RK integration
 	public static final ButcherTableau _defaultTableau = ButcherTableau.DORMAND_PRINCE;
@@ -271,7 +274,7 @@ public final class Swimmer {
 	 * @param stopper       an optional object that can terminate the swimming based
 	 *                      on some condition
 	 * @param listener      a callback object that is called on every step
-	 * @param maxPathLength in meters. This determines the max number of steps based
+	 * @param sMax in meters. This determines the max number of steps based
 	 *                      on the step size. If a stopper is used, the integration
 	 *                      might terminate before all the steps are taken. A
 	 *                      reasonable value for CLAS is 8. meters
@@ -279,7 +282,7 @@ public final class Swimmer {
 	 * @return the total number of steps taken
 	 */
 	public int swim(int charge, double xo, double yo, double zo, double momentum, double theta, double phi,
-			IStopper stopper, IRkListener listener, double maxPathLength, double stepSize) {
+			IStopper stopper, IRkListener listener, double sMax, double stepSize) {
 
 		if (momentum < MINMOMENTUM) {
 			//System.err.println("Skipping low momentum swim (B)");
@@ -291,8 +294,46 @@ public final class Swimmer {
 
 		// Integrate
 		DefaultDerivative deriv = new DefaultDerivative(charge, momentum, _probe);
-		return (new RungeKutta()).uniformStep(uo, 0, maxPathLength, stepSize, deriv, stopper, listener);
+		return (new RungeKutta()).uniformStep(uo, 0, sMax, stepSize, deriv, stopper, listener);
 	}
+	
+	/**
+	 * Swims a charged particle. This is for the listener mode, where a callback is
+	 * called for each advance of the integration Uses a fixed stepsize algorithm.
+	 * 
+	 * @param charge        the charge: -1 for electron, 1 for proton, etc
+	 * @param xo            the x vertex position in meters
+	 * @param yo            the y vertex position in meters
+	 * @param zo            the z vertex position in meters
+	 * @param momentum      initial momentum in GeV/c
+	 * @param theta         initial polar angle in degrees
+	 * @param phi           initial azimuthal angle in degrees
+	 * @param stopper       an optional object that can terminate the swimming based
+	 *                      on some condition
+	 * @param listener      a callback object that is called on every step
+	 * @param s0            The initial path length in meters. 
+	 * @param sMax          The final path length in meters. 
+	 *                      might terminate before all the steps are taken. A
+	 *                      reasonable value for CLAS is 8. meters
+	 * @param stepSize      the uniform step size in meters.
+	 * @return the total number of steps taken
+	 */
+	public int swim(int charge, double xo, double yo, double zo, double momentum, double theta, double phi,
+			IStopper stopper, IRkListener listener, double s0, double sMax, double stepSize) {
+
+		if (momentum < MINMOMENTUM) {
+			//System.err.println("Skipping low momentum swim (B)");
+			return 0;
+		}
+
+		// the the initial six vector
+		double uo[] = initialState(xo, yo, zo, theta, phi);
+
+		// Integrate
+		DefaultDerivative deriv = new DefaultDerivative(charge, momentum, _probe);
+		return (new RungeKutta()).uniformStep(uo, 0, sMax, stepSize, deriv, stopper, listener);
+	}
+
 	
 
 	/**
@@ -322,88 +363,101 @@ public final class Swimmer {
 	 * @param result upon return, results from the swim including the final state vector [x, y, z, px/p, py/p, pz/p]
 	 * @throws RungeKuttaException
 	 */
+	
+	
 	public void swimRho(int charge, double xo, double yo, double zo, double momentum, double theta, double phi,
 			final double fixedRho, double accuracy, double sMax, double stepSize, double relTolerance[], SwimResult result)
 			throws RungeKuttaException {
-		// normally we swim from small rho to a larger rho cutoff.
-		// but we can handle either
 
-		double rho0 = Math.hypot(xo, yo);
 		// set u to the starting state vector
 		double thetaRad = Math.toRadians(theta);
 		double phiRad = Math.toRadians(phi);
 		double sinTheta = Math.sin(thetaRad);
 
-		result.getUf()[0] = xo;
-		result.getUf()[1] = yo;
-		result.getUf()[2] = zo;
-		result.getUf()[3] = sinTheta*Math.cos(phiRad); //px/p
-		result.getUf()[4] = sinTheta*Math.sin(phiRad); //py/p
-		result.getUf()[5] = Math.cos(thetaRad); //pz/p
-
+		double px = sinTheta*Math.cos(phiRad); //px/p
+		double py = sinTheta*Math.sin(phiRad); //py/p
+		double pz = Math.cos(thetaRad); //pz/p
 		
-		DefaultRhoStopper stopper = new DefaultRhoStopper(result.getUf(), 0, sMax, rho0, fixedRho, accuracy);
-
+		double uf[] = result.getUf();
+		uf[0] = xo;
+		uf[1] = yo;
+		uf[2] = xo;
+		uf[3] = px;
+		uf[4] = py;
+		uf[5] = pz;
+		
 		if (momentum < MINMOMENTUM) {
 			System.err.println("Skipping low momentum fixed rho swim (A)");
 			result.setNStep(0);
 			result.setFinalS(0);
+			result.setStatus(-2);
 			return;
 		}
 		
-		// First try
+		//cutoff value of s with tolerance 
+		double sCutoff = sMax - SMAX_TOLERANCE;
 		
-		int ns = swim(charge, xo, yo, zo, momentum, theta, phi, stopper, null, sMax, stepSize, relTolerance, null);
-		System.arraycopy(stopper.getFinalU(), 0, result.getUf(), 0, result.getUf().length);
-		
-		// if we stopped because of max pathlength, we are done (never reached
-		// target rho)
-		double finalPathLength = stopper.getFinalT();
-		if (finalPathLength > sMax) {
-			result.setNStep(ns);
-			result.setFinalS(finalPathLength);
-			return;
-		}
-
-		// are we there yet?
-		double rholast = Math.hypot(result.getUf()[0], result.getUf()[1]);
-		double del = Math.abs(rholast - fixedRho);
-		int maxtry = 10;
+		double del = Double.POSITIVE_INFINITY;
+		int maxtry = 11;
 		int count = 0;
-
-		// set the step size to half the accuracy
-		stepSize = accuracy / 2;
-
+		double sFinal = 0;
+		int ns = 0;
 
 		while ((count < maxtry) && (del > accuracy)) {
-			xo = result.getUf()[0];
-			yo = result.getUf()[1];
-			zo = result.getUf()[2];
-			double px = result.getUf()[3];
-			double py = result.getUf()[4];
-			double pz = result.getUf()[5];
-			double rhoCurr = Math.hypot(xo, yo);
-
-			stopper = new DefaultRhoStopper(result.getUf(), finalPathLength, sMax, rhoCurr, fixedRho, accuracy);
-
-			theta = FastMath.acos2Deg(pz);
-			phi = FastMath.atan2Deg(py, px);
 			
-			ns += swim(charge, xo, yo, zo, momentum, theta, phi, stopper, null, sMax, stepSize, relTolerance, null);
+			uf = result.getUf();
+			if (count > 0) {
+				px = uf[3];
+				py = uf[4];
+				pz = uf[5];
+				theta = FastMath.acos2Deg(pz);
+				phi = FastMath.atan2Deg(py, px);
+			}
+			
+			double rhoCurr = Math.hypot(uf[0], uf[1]);
+			
+			DefaultRhoStopper stopper = new DefaultRhoStopper(uf, sFinal, sMax, rhoCurr, fixedRho, accuracy);
+			
 
+			if ((sFinal + stepSize) > sMax) {
+				stepSize = (sMax-sFinal)/4;
+				if (stepSize < 0) {
+					break;
+				}
+			}
+	//		ns += swim(charge, uf[0], uf[1], uf[2], momentum, theta, phi, stopper, null, sFinal, sMax, stepSize, relTolerance, null);
+	//		ns += swim(charge, uf[0], uf[1], uf[2], momentum, theta, phi, stopper, null, sMax, stepSize, relTolerance, null);
+			ns += swim(charge, uf[0], uf[1], uf[2], momentum, theta, phi, stopper, null, sMax-sFinal, stepSize, relTolerance, null);
+
+			
 			System.arraycopy(stopper.getFinalU(), 0, result.getUf(), 0, result.getUf().length);
 			
-			finalPathLength = stopper.getFinalT();
-
-			rholast = Math.hypot(result.getUf()[0], result.getUf()[1]);
+			sFinal = stopper.getFinalT();
+			
+			double rholast = Math.hypot(result.getUf()[0], result.getUf()[1]);
 			del = Math.abs(rholast - fixedRho);
+			
+			if ((sFinal) > sCutoff) {
+//				System.out.println(" s final   " + (finalPathLength + stepSize) +  "  rhoLast = " + rholast);
+				break;
+			}
+			
 			count++;
-			stepSize /= 2;
+			stepSize = Math.min(stepSize, (sMax-sFinal)/4);
+//			stepSize /= 2;
+			
 		} // while
 
 		result.setNStep(ns);
-		result.setFinalS(finalPathLength);
+		result.setFinalS(sFinal);
+
+		if (del < accuracy) {
+			result.setStatus(0);
+		} else {
+			result.setStatus(-1);
+		}
 	}
+	
 
 	/**
 	 * Swims a particle with a built it stopper for the rho coordinate.
@@ -434,86 +488,99 @@ public final class Swimmer {
 	public void swimRho(int charge, double xo, double yo, double zo, double momentum, double theta, double phi,
 			final double fixedRho, final double accuracy, double sMax, double stepSize, SwimResult result) {
 
-		// normally we swim from small rho to a larger rho cutoff.
-		// but we can handle either
 		
-		double rho0 = Math.hypot(xo, yo);
-		
-		//set u to the starting state vector
+		// set u to the starting state vector
 		double thetaRad = Math.toRadians(theta);
 		double phiRad = Math.toRadians(phi);
 		double sinTheta = Math.sin(thetaRad);
+
+		double px = sinTheta*Math.cos(phiRad); //px/p
+		double py = sinTheta*Math.sin(phiRad); //py/p
+		double pz = Math.cos(thetaRad); //pz/p
 		
-		result.getUf()[0] = xo;
-		result.getUf()[1] = yo;
-		result.getUf()[2] = zo;
-		result.getUf()[3] = sinTheta*Math.cos(phiRad); //px/p
-		result.getUf()[4] = sinTheta*Math.sin(phiRad); //py/p
-		result.getUf()[5] = Math.cos(thetaRad); //pz/p
-
+		double uf[] = result.getUf();
+		uf[0] = xo;
+		uf[1] = yo;
+		uf[2] = xo;
+		uf[3] = px;
+		uf[4] = py;
+		uf[5] = pz;
 		
-		DefaultRhoStopper stopper = new DefaultRhoStopper(result.getUf(), 0, sMax, rho0, fixedRho, accuracy);
-
-
 		if (momentum < MINMOMENTUM) {
-			System.err.println("Skipping low momentum fixed rho swim (B)");
+			System.err.println("Skipping low momentum fixed rho swim (A)");
 			result.setNStep(0);
 			result.setFinalS(0);
+			result.setStatus(-2);
 			return;
 		}
-
-		// our first attempt
-		int ns = swim(charge, xo, yo, zo, momentum, theta, phi, stopper, null, sMax, stepSize);
-		System.arraycopy(stopper.getFinalU(), 0, result.getUf(), 0, result.getUf().length);
 		
-		// if we stopped because of max pathlength, we are done (never reached
-		// target rho)
-		double finalPathLength = stopper.getFinalT();
-		
-		if (finalPathLength > sMax) {
-			result.setNStep(ns);
-			result.setFinalS(finalPathLength);
-			return;
-		}
-
-		// are we there yet?
-		double rholast = Math.hypot(result.getUf()[0], result.getUf()[1]);
-		double del = Math.abs(rholast - fixedRho);
-		int maxtry = 10;
+		//cutoff value of s with tolerance 
+		double sCutoff = sMax - SMAX_TOLERANCE;
+	
+		double del = Double.POSITIVE_INFINITY;
+		int maxtry = 11;
 		int count = 0;
-
-		// reduce the step size
-		stepSize = stepSize / 2;
+		double sFinal = 0;
+		int ns = 0;
 
 		while ((count < maxtry) && (del > accuracy)) {
-			xo = result.getUf()[0];
-			yo = result.getUf()[1];
-			zo = result.getUf()[2];
-			double px = result.getUf()[3];
-			double py = result.getUf()[4];
-			double pz = result.getUf()[5];
-			double rhoCurr = Math.hypot(xo, yo);
+			
+			uf = result.getUf();
+			if (count > 0) {
+				px = uf[3];
+				py = uf[4];
+				pz = uf[5];
+				theta = FastMath.acos2Deg(pz);
+				phi = FastMath.atan2Deg(py, px);
+			}
+			
+			double rhoCurr = Math.hypot(uf[0], uf[1]);
+			
+			DefaultRhoStopper stopper = new DefaultRhoStopper(uf, sFinal, sMax, rhoCurr, fixedRho, accuracy);
+			
+			if ((sFinal + stepSize) > sMax) {
+				stepSize = sMax-sFinal;
+				System.out.println(" UNI next s" + (sFinal + stepSize));
+				
+				if (stepSize < 0) {
+					break;
+				}
+			}
+			
 
-			stopper = new DefaultRhoStopper(result.getUf(), finalPathLength, sMax, rhoCurr, fixedRho, accuracy);
 
-			theta = FastMath.acos2Deg(pz);
-			phi = FastMath.atan2Deg(py, px);
-
-			ns += swim(charge, xo, yo, zo, momentum, theta, phi, stopper, null, sMax, stepSize);
+//			ns += swim(charge, uf[0], uf[1], uf[2], momentum, theta, phi, stopper, null, sFinal, sMax, stepSize);
+//			ns += swim(charge, uf[0], uf[1], uf[2], momentum, theta, phi, stopper, null, sMax, stepSize);
+			ns += swim(charge, uf[0], uf[1], uf[2], momentum, theta, phi, stopper, null, sMax-sFinal, stepSize);
 			
 			System.arraycopy(stopper.getFinalU(), 0, result.getUf(), 0, result.getUf().length);
 			
-
-			finalPathLength = stopper.getFinalT();
-
-			rholast = Math.hypot(result.getUf()[0], result.getUf()[1]);
+			sFinal = stopper.getFinalT();	
+			
+			
+			double rholast = Math.hypot(result.getUf()[0], result.getUf()[1]);
 			del = Math.abs(rholast - fixedRho);
+
+
+			if ((sFinal) > sCutoff) {
+				break;
+			}
+						
 			count++;
-			stepSize = stepSize / 2;
+			stepSize = Math.min(stepSize, (sMax-sFinal)/4);
+
+//			stepSize /= 2;
+
 		} // while
 
 		result.setNStep(ns);
-		result.setFinalS(finalPathLength);
+		result.setFinalS(sFinal);
+
+		if (del < accuracy) {
+			result.setStatus(0);
+		} else {
+			result.setStatus(-1);
+		}
 	}
 
 
@@ -1534,7 +1601,7 @@ public final class Swimmer {
 	 * @param stopper       an optional object that can terminate the swimming based
 	 *                      on some condition
 	 * @param listener      a callback object that is called on every step
-	 * @param maxPathLength in meters. This determines the max number of steps based
+	 * @param sMax in meters. This determines the max number of steps based
 	 *                      on the step size. If a stopper is used, the integration
 	 *                      might terminate before all the steps are taken. A
 	 *                      reasonable value for CLAS is 8. meters
@@ -1551,7 +1618,7 @@ public final class Swimmer {
 	 * @throws RungeKuttaException
 	 */
 	public int swim(int charge, double xo, double yo, double zo, double momentum, double theta, double phi,
-			IStopper stopper, IRkListener listener, double maxPathLength, double stepSize, double relTolerance[],
+			IStopper stopper, IRkListener listener, double sMax, double stepSize, double relTolerance[],
 			double hdata[]) throws RungeKuttaException {
 
 		if (momentum < MINMOMENTUM) {
@@ -1565,11 +1632,61 @@ public final class Swimmer {
 		// Integrate
 		DefaultDerivative deriv = new DefaultDerivative(charge, momentum, _probe);
 
-		int nstep = (new RungeKutta()).adaptiveStep(uo, 0, maxPathLength, stepSize, deriv, stopper, listener,
+		int nstep = (new RungeKutta()).adaptiveStep(uo, 0, sMax, stepSize, deriv, stopper, listener,
 				_defaultTableau, relTolerance, hdata);
 
 		return nstep;
 	}
+	
+	/**
+	 * Swims a charged particle for the listener mode, where a callback is called
+	 * for each advance of the integration Uses an adaptive stepsize algorithm.
+	 * 
+	 * @param charge        the charge: -1 for electron, 1 for proton, etc
+	 * @param xo            the x vertex position in meters
+	 * @param yo            the y vertex position in meters
+	 * @param zo            the z vertex position in meters
+	 * @param momentum      initial momentum in GeV/c
+	 * @param theta         initial polar angle in degrees
+	 * @param phi           initial azimuthal angle in degrees
+	 * @param stopper       an optional object that can terminate the swimming based
+	 *                      on some condition
+	 * @param listener      a callback object that is called on every step
+	 * @param s0            The initial in meters. 
+	 * @param sMax          The max pathlength in meters. 
+	 * @param stepSize      the initial step size in meters.
+	 * @param relTolerance  the error tolerance as fractional diffs. Note it is a
+	 *                      vector, the same dimension of the problem, e.g., 6 for
+	 *                      [x,y,z,vx,vy,vz]. It might be something like {1.0e-10,
+	 *                      1.0e-10, 1.0e-10, 1.0e-8, 1.0e-8, 1.0e-8}
+	 * @param hdata         if not null, should be double[3]. Upon return, hdata[0]
+	 *                      (m) is the min stepsize used, hdata[1] (m) is the
+	 *                      average stepsize used, and hdata[2] (m) is the max
+	 *                      stepsize used
+	 * @return the total number of steps taken
+	 * @throws RungeKuttaException
+	 */
+	public int swim(int charge, double xo, double yo, double zo, double momentum, double theta, double phi,
+			IStopper stopper, IRkListener listener, double s0, double sMax, double stepSize, double relTolerance[],
+			double hdata[]) throws RungeKuttaException {
+
+		if (momentum < MINMOMENTUM) {
+			System.err.println("Skipping low momentum swim (E)");
+			return 0;
+		}
+
+		// the the initial six vector
+		double uo[] = initialState(xo, yo, zo, theta, phi);
+
+		// Integrate
+		DefaultDerivative deriv = new DefaultDerivative(charge, momentum, _probe);
+
+		int nstep = (new RungeKutta()).adaptiveStep(uo, s0, sMax, stepSize, deriv, stopper, listener,
+				_defaultTableau, relTolerance, hdata);
+
+		return nstep;
+	}
+
 
 	/**
 	 * Swims a charged particle. This is for the trajectory mode, where you want to

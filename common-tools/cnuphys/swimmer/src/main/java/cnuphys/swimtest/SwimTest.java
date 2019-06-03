@@ -7,8 +7,10 @@ import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
 import java.awt.event.WindowAdapter;
 import java.awt.event.WindowEvent;
+import java.io.DataOutputStream;
 import java.io.File;
 import java.io.FileNotFoundException;
+import java.io.FileOutputStream;
 import java.util.ArrayList;
 import java.util.Random;
 
@@ -19,7 +21,9 @@ import javax.swing.JMenuBar;
 import javax.swing.JMenuItem;
 import javax.swing.JPanel;
 
+import cnuphys.lund.LundId;
 import cnuphys.lund.LundStyle;
+import cnuphys.lund.LundSupport;
 import cnuphys.lund.LundTrackDialog;
 import cnuphys.lund.SwimTrajectoryListener;
 import cnuphys.magfield.FastMath;
@@ -114,8 +118,8 @@ public class SwimTest {
 		final JMenuItem polyItem = new JMenuItem("SwimZ vs. Poly Approx Test");
 		final JMenuItem specialItem = new JMenuItem("Special Trouble Cases");
 
-		final JMenuItem planeItem = new JMenuItem("Swim To Plane Test");
 		final JMenuItem rhoItem = new JMenuItem("Swim To Rho (cylinder) Test");
+		final JMenuItem csvItem = new JMenuItem("Output to CSV");
 		
 		
 		
@@ -129,19 +133,14 @@ public class SwimTest {
 					SectorTest.testSectorSwim(100000);
 				} else if (e.getSource() == threadItem) {
 					ThreadTest.threadTest(100, 8);
-				} else if (e.getSource() == planeItem) {
-					PlaneTest.planeTest();
 				} else if (e.getSource() == rhoItem) {
 					RhoTest.rhoTest();
-				}else if (e.getSource() == oneVtwoItem) {
-					CompareSwimmers.swimmerVswimmer2Test(3344632211L, 10000);
-				} else if (e.getSource() == specialItem) {
-					CompareSwimmers.specialCaseTest();
-					;
 				} else if (e.getSource() == polyItem) {
 					SmallDZTest.smallDZTest(3344632211L, 10000, 100);
 				} else if (e.getSource() == reconfigItem) {
 					MagneticFields.getInstance().removeMapOverlap();
+				} else if (e.getSource() == csvItem) {
+					outToCSV();
 				}
 
 			}
@@ -155,8 +154,9 @@ public class SwimTest {
 		testSectorItem.addActionListener(al);
 		reconfigItem.addActionListener(al);
 		specialItem.addActionListener(al);
-		planeItem.addActionListener(al);
 		rhoItem.addActionListener(al);
+		csvItem.addActionListener(al);
+		
 		menu.add(createTrajItem);
 		menu.add(oneVtwoItem);
 		menu.add(polyItem);
@@ -165,10 +165,85 @@ public class SwimTest {
 		menu.add(threadItem);
 		menu.add(specialItem);
 
-		menu.add(planeItem);
 		menu.add(rhoItem);
+		menu.add(csvItem);
 		return menu;
 	}
+	
+	//for Nicholas at VaTech
+	private static void outToCSV() {
+		
+		double rMax = 6;
+		double sMax = 8;
+		double stepSize = 1.0e-3; //m
+		double distanceBetweenSaves = stepSize;
+		
+		
+		double xo = 0;
+		double yo = 0;
+		double zo = 0;
+		
+		
+		Swimmer swimmer = new Swimmer();
+		MagneticFields mf = MagneticFields.getInstance();
+		
+		
+		double torusScale = (mf.hasActiveTorus()? mf.getTorus().getScaleFactor() : 0);
+		double solenoidScale = (mf.hasActiveSolenoid()? mf.getSolenoid().getScaleFactor() : 0);
+		
+		//CHANGE THESE
+		LundId lid = LundSupport.getElectron();
+		int id = LundSupport.getElectron().getId();
+		double p = 2; //GeV/c
+		double theta = 15; //degrees
+		double phi = 10; //degrees;
+		
+		String fn = String.format("%s_%-2.0fGeV.csv", lid.getName(), p);
+		fn = fn.replace("  ", "");		
+		fn = fn.replace(" ", "");		
+		String dir = System.getProperty("user.home");
+		File file = new File(dir, fn);
+		String path = file.getPath();
+		
+		try {
+			DataOutputStream dos = new DataOutputStream(new FileOutputStream(path));
+			
+			String header = String.format("%d,%-3.1f,%-3.1f,%-3.1f,%-3.1f,%-3.1f,%-3.1f,%-3.1f,%-3.1f", id, torusScale, solenoidScale, xo, yo, zo, p, theta, phi);
+			stringLn(dos, header);
+			
+			
+			SwimTrajectory traj = swimmer.swim(lid.getCharge(), xo, yo, zo, p, theta, phi, rMax, sMax, stepSize, distanceBetweenSaves);
+			
+			for (double u[] : traj) {
+				String s = String.format("%f,%f,%f,%f,%f,%f", u[0], u[1], u[2], p*u[3], p*u[4], p*u[5]);
+				stringLn(dos, s);
+			}
+			dos.close();
+		}
+		catch (Exception e) {
+			e.printStackTrace();
+		}
+
+	}
+	
+	//for csv output
+	private static void stringLn(DataOutputStream dos, String s) {
+		
+		s = s.replace("  ", "");		
+		s = s.replace(" ", "");		
+		s = s.replace(", ", ",");		
+		s = s.replace(", ", ",");		
+		s = s.replace(" ,", ",");		
+
+		
+		try {
+			dos.writeBytes(s);
+			dos.writeBytes("\n");
+		} catch (Exception e) {
+			e.printStackTrace();
+		}
+	}
+
 
 	private static JFrame createFrame() {
 		final JFrame testFrame = new JFrame("Swim Test Frame");
@@ -463,7 +538,7 @@ public class SwimTest {
 	 * @param arg command line arguments (ignored)
 	 */
 	public static void main(String arg[]) {
-
+		
 		initMagField();
 
 		System.out.println("Active Field Description: " + MagneticFields.getInstance().getActiveFieldDescription());
