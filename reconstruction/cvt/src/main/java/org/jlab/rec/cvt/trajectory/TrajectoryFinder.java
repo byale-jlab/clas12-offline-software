@@ -225,8 +225,8 @@ public class TrajectoryFinder {
         if(ctof_geo!=null) {
             double radius = ctof_geo.getRadius(1);
             int charge = trk.get_Q();
-            double maxPathLength = 5.0;//very loose cut 
-            double accuracy = 0.5; // accuracy of stopper in cm
+            double maxPathLength = 3.0;//very loose cut 
+            double accuracy = 0.1; // accuracy of stopper in cm
             double stepsize = 0.1; // initial step size
             swimmer.SetSwimParameters(trk.get_helix().xdca() / 10, trk.get_helix().ydca() / 10, trk.get_helix().get_Z0() / 10, 
                     Math.toDegrees(trk.get_helix().get_phi_at_dca()), Math.toDegrees(Math.acos(trk.get_helix().costheta())),
