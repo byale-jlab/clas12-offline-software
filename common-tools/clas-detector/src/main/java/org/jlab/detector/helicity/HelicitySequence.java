@@ -288,6 +288,14 @@ public class HelicitySequence implements Comparator<HelicityState> {
      * Reject false flips, e.g. in between files if decoding files singly.
      */
     private void rejectFalseFlips() {
+
+        // always reject the first state in the sequence, since it was
+        // triggered by the first available readout and (usually) not
+        // on an actual state change, so it's timestamp is invalid:
+        if (this.states.size()>0) {
+            this.states.remove(0);
+        }
+
         while (true) {
             boolean rejection=false;
             for (int ii=0; ii<this.states.size()-3; ii++) {
@@ -302,7 +310,7 @@ public class HelicitySequence implements Comparator<HelicityState> {
             if (!rejection) break;
         }
     }
-
+    
     /**
      * Analyze the sequence, prune false states, initialize the generator.
      * @return sequence integrity
@@ -321,7 +329,9 @@ public class HelicitySequence implements Comparator<HelicityState> {
                 System.out.println("HWP: "+this.halfWavePlate);
             }
         }
-        
+
+
+        /*
         // initialize the generator:
         this.generator.reset();
         for (int ii=0; ii<this.states.size(); ii++) {
@@ -334,10 +344,11 @@ public class HelicitySequence implements Comparator<HelicityState> {
                 this.generator.addState(this.states.get(ii));
             }
         }
+        */
 
         this.analyzed=true;
 
-        return this.integrityCheck();
+        return this.integrityCheck() && this.generator.initialize(this.states);
     }
 
     /**

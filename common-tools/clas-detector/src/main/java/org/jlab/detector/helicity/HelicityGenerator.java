@@ -2,6 +2,7 @@ package org.jlab.detector.helicity;
 
 import java.util.List;
 import java.util.ArrayList;
+import java.util.Collections;
 
 /**
  * Helicity Pseudo-Random Sequence.
@@ -28,6 +29,7 @@ public final class HelicityGenerator {
     public static final int REGISTER_SIZE=30;
     private final List<Integer> states=new ArrayList<>();
     private int register=0;
+    private long timestamp=0;
 
     public HelicityGenerator(){}
 
@@ -44,6 +46,14 @@ public final class HelicityGenerator {
         return nextBit;
     }
 
+    /**
+     * Get the timestamp of the first state in the generator sequence.
+     * @return timestamp (4ns)
+     */
+    public long getTimestamp() {
+        return timestamp;
+    }
+    
     /**
      * Shift the register with the next state.
      * Requires initialized()==false.
@@ -68,6 +78,7 @@ public final class HelicityGenerator {
     public void reset() {
         this.states.clear();
         this.register=0;
+        this.timestamp=-1;
     }
 
     /**
@@ -142,5 +153,111 @@ public final class HelicityGenerator {
             this.shiftRegister();
         return this.states.get(n) == 0 ?
             HelicityBit.PLUS : HelicityBit.MINUS;
+    }
+    
+   
+    /**
+     * Initialize with a list of states.
+     * 
+     * The states are first time-ordered, and error-checking is done to find the
+     * first valid sequence of suffecient length in the list and use it to
+     * initialize the generator, otherwise the return value will be false.
+     * @param states list of HelicityState objects
+     * @return success of initializing the generator 
+     */
+    public final boolean initialize(List<HelicityState> states) {
+
+        // make sure they're time-ordered:
+        Collections.sort(states);
+        
+        // reset this generator:
+        this.reset();
+      
+        // these will be the first valid sequence found in the input states:
+        List<HelicityState> genStates=new ArrayList<>();
+
+        for (int ii=0; ii<this.states.size(); ii++) {
+            
+            // any initial state will do:
+            if (genStates.isEmpty()) {
+                genStates.add(states.get(ii));
+            }
+            
+            // bad pair sync, reset the sequence:
+            else if (states.get(ii).getPairSync().value() ==
+                genStates.get(genStates.size()-1).getPairSync().value()) {
+                genStates.clear();
+            }
+
+            // bad pattern sync, reset the sequence:
+            else if (genStates.size() > 2) {
+                if (states.get(ii).getPatternSync().value()+
+                    genStates.get(genStates.size()-1).getPatternSync().value()+
+                    genStates.get(genStates.size()-2).getPatternSync().value()+
+                    genStates.get(genStates.size()-3).getPatternSync().value() != 2) {
+                    genStates.clear();
+                }
+            }
+           
+            else {
+
+                // get time difference between states:
+                final double seconds = (states.get(ii).getTimestamp() -
+                        genStates.get(genStates.size()-1).getTimestamp()) / HelicitySequence.TIMESTAMP_CLOCK;
+                
+                // bad timestamp delta, reset the sequence:
+                if (seconds < (1.0-0.5)/HelicitySequence.HELICITY_CLOCK ||
+                    seconds > (1.0+0.5)/HelicitySequence.HELICITY_CLOCK) {
+                    genStates.clear();
+                }
+
+                // passed all checks, add the state:
+                else {
+                    genStates.add(states.get(ii));
+                }
+            }
+       
+            // ok, we got enough to initialize the generator:
+            // FIXME: we assume quartet here (the "4")
+            if (genStates.size() >= REGISTER_SIZE*4+1) {
+                
+                int idxOffset = -1;
+
+                // store all states timestamps to apply a modulo correction
+                List <Double> timestamps = new ArrayList<>();
+               
+                for (int jj=0; jj<genStates.size(); jj++) {
+
+                    // we've got enough valid, consecutive states, so correct
+                    // the first state's timestamp and stop the investigation:
+                    if (this.initialized()) {
+                        this.timestamp=0;
+                        for (int kk=0; kk<timestamps.size(); kk++) {
+                            this.timestamp += timestamps.get(kk);
+                        }
+                        this.timestamp /= timestamps.size();
+                        break;
+                    }
+
+                    if (genStates.get(jj).getPatternSync() == HelicityBit.MINUS) {
+                        if (this.size() == 0) {
+                            idxOffset = jj;
+                        }
+                        this.addState(states.get(ii));
+                    }
+
+                    // subtract off the nominal flip period:
+                    if (this.size() > 0) {
+                        timestamps.add(genStates.get(jj).getTimestamp() - (jj-idxOffset)/HelicitySequence.HELICITY_CLOCK*HelicitySequence.TIMESTAMP_CLOCK);
+                    }
+                }
+            }
+        }
+
+        if (!this.initialized()) {
+            this.reset();
+        }
+
+        return this.initialized();
     }
 }
