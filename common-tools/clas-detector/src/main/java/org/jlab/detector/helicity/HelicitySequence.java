@@ -225,13 +225,18 @@ public class HelicitySequence implements Comparator<HelicityState> {
      * This uses the pseudo-random sequence of the helicity hardware to
      * generate the sequence into the infinite future and requires that enough
      * states were provided to initialize it.  Returns null if generator cannot
-     * be initialized or timestamp is before the measured ones.
+     * be initialized or timestamp is before the generator timestamp.
      * 
      * @param timestamp TI timestamp (i.e. RUN::config.timestamp)
      * @return the helicity bit
      */
     public HelicityBit findPrediction(long timestamp) {
         if (!this.analyzed) this.analyze();
+        if (timestamp < this.generator.getTimestamp()) return null;
+        final int n = (int) ( (timestamp-this.generator.getTimestamp()) /
+                TIMESTAMP_CLOCK * HELICITY_CLOCK );
+        return this.getPrediction(n);
+        /*
         if (timestamp < this.getTimestamp(0)) return null;
         if (timestamp <= this.getTimestamp(this.size()-1)) {
             // it's in the measured range, so lookup index based on timestamp:
@@ -247,6 +252,7 @@ public class HelicitySequence implements Comparator<HelicityState> {
                     TIMESTAMP_CLOCK * HELICITY_CLOCK );
             return this.getPrediction(n);
         }
+        */
     }
 
     /**
