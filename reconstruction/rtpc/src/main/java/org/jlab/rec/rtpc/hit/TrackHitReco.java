@@ -140,11 +140,11 @@ public class TrackHitReco {
                 Time = hit.time();
 
                 //System.out.println("Track Reco " + Time);
-                Time += tdiff;
+                //Time += tdiff;
 		           
                 // find reconstructed position of ionization from Time info		                
                 drifttime = Time-t_gap;
-                r_rec = get_r_rec(hit.z(),drifttime,tcathode,1500); //in mm
+                r_rec = get_r_rec(hit.z(),Time,tcathode,1800); //in mm
                 dphi = get_dphi(hit.z(),r_rec); // in rad
                 
                 phi_rec=hit.phi()-dphi-phi_gap;
@@ -176,7 +176,8 @@ public class TrackHitReco {
     private double get_r_rec(double z,double t, double t_cathode, double t_max){
         a_t = get_rec_coef(a_t1,a_t2,a_t3,a_t4,a_t5,z);
         b_t = get_rec_coef(b_t1,b_t2,b_t3,b_t4,b_t5,z);
-	return ((-(Math.sqrt(a_t*a_t+(4*b_t*t*t_cathode/t_max)))+a_t+(14*b_t))/(2*b_t))*10.0;
+	//return ((-(Math.sqrt(a_t*a_t+(4*b_t*t*t_cathode/t_max)))+a_t+(14*b_t))/(2*b_t))*10.0;
+        return Math.sqrt((70*70*(1-((t-t_cathode)/t_max)))+(30*30*((t-t_cathode)/t_max)));// - 40;
     }
     
     private double get_dphi(double z, double r){
