@@ -12,6 +12,7 @@ import java.io.File;
 import java.io.FileWriter;
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import javax.swing.JFrame;
@@ -118,12 +119,15 @@ public class TrackHitReco {
         GraphErrors grz2 = new GraphErrors();
         EmbeddedCanvas c = new EmbeddedCanvas();
         
-        c.divide(1,2);
+        c.divide(2,1);
         JFrame j = new JFrame();
-        j.setSize(800,800);
+        j.setSize(1600,800);
         boolean kill = false;
-        try{Thread.sleep(500);}catch(InterruptedException e){}
-        
+        if(draw) try{Thread.sleep(500);}catch(InterruptedException e){}
+        //List<Integer> eventnumlist = new ArrayList<>(Arrays.asList(8,12,15,16,18,144));//run ctest
+        //List<Integer> eventnumlist = new ArrayList<>(Arrays.asList(8,14,27,42));//run 98 
+        List<Integer> eventnumlist = new ArrayList<>(Arrays.asList(30,35,66,99,101,114));
+        //eventnumlist.add(eventnum);
         
         try {
 
@@ -132,7 +136,8 @@ public class TrackHitReco {
             {out.mkdirs();}
             //FileWriter write = new FileWriter("/Users/davidpayette/Desktop/SignalStudies/trackenergy.txt",true); 
             FileWriter write = new FileWriter("/Users/davidpayette/Desktop/SignalStudies/timespectra.txt",true); 
-            FileWriter write2 = new FileWriter("/Users/davidpayette/Desktop/SignalStudies/timeenergy.txt",true); 
+            FileWriter write2 = new FileWriter("/Users/davidpayette/Desktop/SignalStudies/timeenergy.txt",true);
+            
         for(int TID : tids) {
             double adc = 0;
             kill = false;
@@ -150,10 +155,11 @@ public class TrackHitReco {
             else tcathode = 6000;
             tdiff = tcathode - larget;
             //tdiff = 1800-larget;
-            //tdiff = 0;
+            tdiff = 0;
             tdiffmap.put(TID, tdiff);
             recotrackmap.put(TID, new ArrayList<>());
             List<HitVector> allhits = track.getAllHits();
+            //if(allhits.size() > 10) eventnumlist.add(eventnum);
             write.write(allhits.size() + "\r\n");
             for(HitVector hit : allhits) {
                 adc += hit.adc();
@@ -165,7 +171,8 @@ public class TrackHitReco {
 		           
                 // find reconstructed position of ionization from Time info		                
                 drifttime = Time-t_gap;
-                r_rec = get_r_rec(hit.z(),drifttime,tcathode,1500); //in mm
+                r_rec = get_r_rec(hit.z(),Time,2000,1800); //in mm
+                
                 dphi = get_dphi(hit.z(),r_rec); // in rad
                 
                 phi_rec=hit.phi()-dphi-phi_gap;
@@ -180,8 +187,9 @@ public class TrackHitReco {
                 // x,y,z pos of reconstructed track
                 x_rec=r_rec*(Math.cos(phi_rec));
                 y_rec=r_rec*(Math.sin(phi_rec));
-                if(true){//allhits.size() > 10){
+                if(eventnumlist.contains(eventnum)){//true){//allhits.size() > 10){
                     gxy.addPoint(x_rec, y_rec, 0, 0);
+                    //System.out.println(Time + " " + r_rec);
                 } //PLOTTING
                 //if(r_rec > 80) kill = true;
                 //System.out.println("reco" + x_rec + " " + y_rec);
@@ -220,14 +228,19 @@ public class TrackHitReco {
                 theta+=0.01;
         }
         c.cd(0);
+        gxy.setTitleX("x (mm)");
+        gxy.setTitleY("y (mm)");
         if(!kill) c.draw(gxy);
         c.draw(gcircles,"same");
         c.draw(gsimxy,"same");
         c.cd(1);
+        grz.setTitleX("r (mm)");
+        grz.setTitleY("z (mm)");
         c.draw(grz);
+        
         c.draw(grz2,"same");
         j.add(c);
-        j.setVisible(true);}
+        if(eventnumlist.contains(eventnum))j.setVisible(true);}
         
                     write.close();
                     write2.close();
@@ -246,7 +259,9 @@ public class TrackHitReco {
     private double get_r_rec(double z,double t, double t_cathode, double t_max){
         a_t = get_rec_coef(a_t1,a_t2,a_t3,a_t4,a_t5,z);
         b_t = get_rec_coef(b_t1,b_t2,b_t3,b_t4,b_t5,z);
-	return ((-(Math.sqrt(a_t*a_t+(4*b_t*t*t_cathode/t_max)))+a_t+(14*b_t))/(2*b_t))*10.0;
+	//return ((-(Math.sqrt(a_t*a_t+(4*b_t*t*t_cathode/t_max)))+a_t+(14*b_t))/(2*b_t))*10.0;
+        return Math.sqrt((70*70*(1-((t-t_cathode)/t_max)))+(30*30*((t-t_cathode)/t_max)));// - 40;
+        //r = sqrt( r_max^2 * (1 - delt/t_max) + r_min^2 * (delt/t_max) ) where r_max = 7 cm, r_min = 3 cm, and delt = t - t_offset.
     }
     
     private double get_dphi(double z, double r){

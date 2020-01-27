@@ -90,9 +90,9 @@ public class RecoBankWriter {
                 bank.setFloat("py", row, (float) finaltrackinfomap.get(TID).get_py());
                 bank.setFloat("pz", row, (float) finaltrackinfomap.get(TID).get_pz());
                 bank.setFloat("vz", row, (float) finaltrackinfomap.get(TID).get_vz());
-                bank.setFloat("theta", row, (float) finaltrackinfomap.get(TID).get_theta());
-                bank.setFloat("phi", row, (float) finaltrackinfomap.get(TID).get_phi());
-                bank.setInt("numhits", row, finaltrackinfomap.get(TID).get_numhits());
+                //bank.setFloat("theta", row, (float) finaltrackinfomap.get(TID).get_theta());
+                //bank.setFloat("phi", row, (float) finaltrackinfomap.get(TID).get_phi());
+                //bank.setInt("numhits", row, finaltrackinfomap.get(TID).get_numhits());
                 bank.setFloat("trackl", row, (float) finaltrackinfomap.get(TID).get_tl());
                 bank.setFloat("dEdx", row, (float) finaltrackinfomap.get(TID).get_dEdx());
                 

@@ -86,7 +86,7 @@ public class HitReader {
                 {out.mkdirs();}
                 FileWriter write = new FileWriter("/Users/davidpayette/Desktop/SignalStudies/sig.txt",true);     
 
-            
+            //bankDGTZ.show();
             for(int i = 0; i<rows; i++){				
                 hitnb[i] = i+1;
                 layer = bankDGTZ.getByte("layer", i);
@@ -116,9 +116,14 @@ public class HitReader {
                     posZ[i] = 0;
                 }		
                 
-                if(component != prevcomponent && layer != prevlayer) write.write(component + "\t" + layer + "\t" + Edep[i] + "\r\n");
-                prevcomponent = component; 
-                prevlayer = layer;
+                if(component != prevcomponent && layer != prevlayer && Edep[i] > 350){
+                    write.write(component + "\t" + layer + "\t" + Edep[i] + "\r\n");
+                    prevcomponent = component; 
+                    prevlayer = layer;
+                }
+               
+                Edep[i] -= 256;
+                if(Edep[i] < 0) Edep[i] = 0;
                 Hit hit = new Hit(1, cellID[i], 1, Time[i]);
                 hit.set_EdepTrue(Edep[i]);
                 if(!cosmic){

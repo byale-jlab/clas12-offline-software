@@ -65,11 +65,11 @@ public class RTPCEngine extends ReconstructionEngine{
             //
             
             //Sort Hits into Tracks at the Readout Pads
-            TrackFinder TF = new TrackFinder(params,false);	
+            TrackFinder TF = new TrackFinder(params,true,eventnum);	
             //Calculate Average Time of Hit Signals
             TimeAverage TA = new TimeAverage(params);
             //Reconstruct Hits in Drift Region
-            TrackHitReco TR = new TrackHitReco(params,hits,true,eventnum);
+            TrackHitReco TR = new TrackHitReco(params,hits,false,eventnum);
             
             //Helix Fit Tracks to calculate Track Parameters
             HelixFitTest HF = new HelixFitTest(params);
@@ -110,7 +110,7 @@ public class RTPCEngine extends ReconstructionEngine{
         
         //String inputFile = "/Users/davidpayette/Desktop/6b.2.0/myClara/good.hipo";
         //String inputFile = "/Users/davidpayette/Desktop/6b.2.0/myClara/cosmics.hipo";
-        String inputFile = "/Users/davidpayette/Desktop/6b.2.0/myClara/ctest.hipo";
+        String inputFile = "/Users/davidpayette/Desktop/6b.2.0/myClara/cosmic100.hipo";
         //String inputFile = "/Users/davidpayette/Desktop/6b.2.0/myClara/new40p.hipo";
         //String inputFile = "/Users/davidpayette/Desktop/rtpcbranch/1ep.hipo";
         //String inputFile = "/Users/davidpayette/Desktop/6b.2.0/myClara/plugins/clas12/340_40p.hipo";
@@ -127,13 +127,12 @@ public class RTPCEngine extends ReconstructionEngine{
         writer.open(outputFile);
         //System.out.println("starting " + starttime);
         int eventcount = 0;
-        int eventselect = 144; //144
+        int eventselect = 144; //8,12,15,16,18,144
         while(reader.hasEvent()){	           
             DataEvent event = reader.getNextEvent();
-            //if(eventcount == eventselect){
+            
             en.processDataEvent(event);
             writer.writeEvent(event);
-            //}else if(eventcount > eventselect) break;
             eventcount ++;
         }
         

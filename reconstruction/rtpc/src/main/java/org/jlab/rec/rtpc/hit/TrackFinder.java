@@ -10,6 +10,7 @@ import java.io.File;
 import java.io.FileWriter;
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Set;
@@ -42,7 +43,7 @@ public class TrackFinder {
     private String method = "phiz";
     private int minhitcount = 5; 
 
-    public TrackFinder(HitParameters params, boolean draw) {
+    public TrackFinder(HitParameters params, boolean draw, int eventnum) {
         /*	
          *Initializations 
          */
@@ -146,12 +147,15 @@ public class TrackFinder {
         
        
         
-        /*List<GraphErrors> g1 = new ArrayList<>();
+        List<GraphErrors> g1 = new ArrayList<>();
         List<H2F> hphi = new ArrayList<>();
         List<H2F> hz = new ArrayList<>();
         EmbeddedCanvas c = new EmbeddedCanvas();
         JFrame j = new JFrame();
         j.setSize(2560,1600);
+        EmbeddedCanvas c2 = new EmbeddedCanvas();
+        JFrame j2 = new JFrame();
+        j2.setSize(2560,1600);
 
         //Flag crossing tracks
         int gindex = 0;
@@ -179,22 +183,35 @@ public class TrackFinder {
                 List<Integer> slice = t.getTimeSlice(time);
                 for(int pad : slice){
                     PadVector p = new PadVector(pad);
-                    if(draw) g1.get(gindex).addPoint(p.phi(), p.z(), 0, 0);
+                    if(draw) g1.get(gindex).addPoint(p.phideg(), p.z(), 0, 0);
                 }              
             }
             gindex++;
         }
-        if(draw){
+        List<Integer> eventnumlist = new ArrayList<>(Arrays.asList(30,35,66,99,101,114));
+        if(draw && eventnumlist.contains(eventnum)){
             int numrows = (g1.size()-g1.size()%5)/5 + 1;
         c.divide(5, Math.max(5, numrows));
         int padloc = 0;
+        GraphErrors bounds = new GraphErrors();
+        bounds.setMarkerSize(0);
+        bounds.addPoint(0, -200, 0, 0);
+        bounds.addPoint(360, 200, 0, 0);
         for(GraphErrors g : g1){
+            
+            g.setTitleX("phi (deg)");
+            g.setTitleY("z (mm)");
             c.cd(padloc);
             c.draw(g);
+            g.setTitle(eventnum + "");
+            c2.draw(g,"same");
+            //c2.draw(bounds,"same");
             padloc++;
         }
-        j.add(c);
-        j.setVisible(true);}*/
+        //j.add(c);
+        //j.setVisible(true);
+        j2.add(c2);
+        j2.setVisible(true);}
         /*
          * Output
          */

@@ -68,4 +68,8 @@ public class PadVector {
     public double phi(){
             return _vec.phi();
     }
+    
+    public double phideg(){
+        return Math.toDegrees(_vec.phi());
+    }
 }
